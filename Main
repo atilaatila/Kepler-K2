@@ -1,0 +1,165 @@
+from astropy.io import fits
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation, PillowWriter
+import csv
+import matplotlib.patches as patches
+from scipy.io import savemat
+from concurrent.futures import ThreadPoolExecutor
+
+
+def read_single_fits_file(file_name):
+    with fits.open(file_name) as hdulist:
+        header1 = hdulist[1].header
+        header2 = hdulist[2].header
+        N_date = header1['NAXIS2']
+        col_start = header2['CRVAL1P']
+        row_start = header2['CRVAL2P']
+        N_pix = header2['NAXIS2']
+        tab = hdulist[1].data
+        t = tab['TIME']
+        col_sap = tab['FLUX']
+
+    return N_date, col_start, row_start, N_pix, t, col_sap
+
+
+def read_fits_data(dir_data):
+    """
+    Reads FITS files from the specified directory and extracts necessary headers and data.
+
+    Parameters:
+    dir_data (str): Directory path containing FITS files.
+
+    Returns:
+    tuple: Contains number of rows, number of files, number of dates, time series data,
+           raw image data, and corrected image data.
+    """
+    file_list = [os.path.join(dir_data, f) for f in os.listdir(dir_data) if f.endswith('c03_spd-targ.fits')]
+    N_file = len(file_list)
+
+    with ThreadPoolExecutor() as executor:
+        results = list(executor.map(read_single_fits_file, file_list))
+
+    N_date_ii = np.array([result[0] for result in results])
+    col_start = np.array([result[1] for result in results])
+    row_start = np.array([result[2] for result in results])
+    N_pix = np.array([result[3] for result in results])
+
+    col_min = col_start.min()
+    col_max = col_start.max()
+    N_col = int(col_max - col_min + 1)
+
+    row_min = row_start.min()
+    row_max = (row_start + N_pix).max()
+    N_row = int(row_max - row_min + 1)
+    N_date = int(N_date_ii.max())
+
+    time_time_series = np.zeros((N_date, N_file), dtype=np.float32)
+
+    # Use memory-mapped arrays to avoid large memory allocation
+    image_time_series_raw = np.memmap('image_time_series_raw.dat', dtype=np.float32, mode='w+', shape=(N_row, N_date, N_file))
+    image_time_series_cor = np.memmap('image_time_series_cor.dat', dtype=np.float32, mode='w+', shape=(N_row, N_date, N_file))
+
+    for ii, (N_date, col_start, row_start, N_pix, t, col_sap) in enumerate(results):
+        ind_y_min = int(row_start - row_min)
+        ind_y_max = int(ind_y_min + N_pix)
+
+        time_time_series[:, ii] = t
+
+        image_time_series_raw[ind_y_min:ind_y_max, :, ii] = col_sap.T
+        image_time_series_cor[ind_y_min:ind_y_max, :, ii] = col_sap.T
+
+    return N_row, N_file, N_date, time_time_series, image_time_series_raw, image_time_series_cor
+
+
+def preprocess_data(image_time_series_raw):
+    """
+    Preprocesses raw image data to remove NaN frames and calculate mean and median images.
+
+    Parameters:
+    image_time_series_raw (numpy.ndarray): Raw image data.
+
+    Returns:
+    tuple: Mean image, median image, and reshaped image time series.
+    """
+    N_row, N_file, N_date_good = image_time_series_raw.shape[0], image_time_series_raw.shape[2], image_time_series_raw.shape[1]
+
+    # Remove NaN frames
+    ind_good = [ii for ii in range(N_date_good) if not np.isnan(image_time_series_raw[:, ii, :]).any()]
+    N_date_good = len(ind_good)
+
+    # New time series without NaN frames
+    image_time_series_good = image_time_series_raw[:, ind_good, :]
+
+    # Calculate mean and median without NaN frames
+    ima_good_mean = np.mean(image_time_series_good, axis=1)
+    ima_good_median = np.median(image_time_series_good, axis=1)
+
+    # Reshape the array such that time is the last dimension
+    image_time_series_reshape = np.transpose(image_time_series_good, (0, 2, 1))
+    return ima_good_mean, ima_good_median, image_time_series_reshape
+
+
+def create_animation(image_time_series_reshape, save_directory):
+    """
+    Creates an animation of the image time series and saves each frame as a PNG and MAT file.
+
+    Parameters:
+    image_time_series_reshape (numpy.ndarray): Reshaped image time series.
+    save_directory (str): Directory to save the animation frames and files.
+    """
+    fig_cleaned, ax_cleaned = plt.subplots(figsize=(7.00, 3.50))
+    ax_cleaned.set_xticks([])
+    ax_cleaned.set_yticks([])
+    ax_cleaned.grid(False)
+    
+    # Ensure save directory exists
+    if not os.path.exists(save_directory):
+        os.makedirs(save_directory)
+
+    def update_cleaned(frame):
+        if frame < image_time_series_reshape.shape[2]:
+            frame_data_cleaned = image_time_series_reshape[:, :, frame]
+            ax_cleaned.clear()
+            ax_cleaned.imshow(frame_data_cleaned, cmap='viridis', origin='lower', vmin=0, vmax=50, aspect='auto')
+            ax_cleaned.set_title(f"Frame {frame} - Cleaned")
+            ax_cleaned.set_xlabel("Pixel Row")
+            ax_cleaned.set_ylabel("Time")
+            ax_cleaned.set_xticks([])
+            ax_cleaned.set_yticks([])
+            ax_cleaned.grid(False)
+            print('Frame being updated:', frame)
+            
+            # Save each frame as an image
+            image_filename = os.path.join(save_directory, f'frame_{frame:04d}.png')
+            plt.savefig(image_filename)
+            
+            # Save each frame as a .MAT file
+            mat_filename = os.path.join(save_directory, f'frame_{frame:04d}.mat')
+            savemat(mat_filename, {'frame_data': frame_data_cleaned})
+
+    # Create the cleaned animation and set the speed
+    animation_cleaned = FuncAnimation(fig_cleaned, update_cleaned, frames=image_time_series_reshape.shape[2], interval=100)
+    # Specify the writer explicitly to handle the .gif extension
+    save_path_cleaned = os.path.join(save_directory, 'image_time_series_animation_V1.gif')
+    writer_cleaned = PillowWriter(fps=50)  # Adjust the fps for desired speed
+    animation_cleaned.save(save_path_cleaned, writer=writer_cleaned)
+    plt.show()
+
+
+def main():
+    dir_data = 'D:\\Kepler Code'
+    save_directory = 'D:\\Kepler Code\\KeplerK2\\Individual Frames'
+
+    N_row, N_file, N_date, time_time_series, image_time_series_raw, image_time_series_cor = read_fits_data(dir_data)
+    ima_good_mean, ima_good_median, image_time_series_reshape = preprocess_data(image_time_series_raw)
+
+    create_animation(image_time_series_reshape, save_directory)
+    
+    plt.show()
+
+    input("Press Enter to exit...")
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,22 @@
+import os
+from scipy.io import loadmat
+import matplotlib.pyplot as plt
+
+# Directory where the .mat files are saved
+save_directory = 'D:\\Kepler Code\\KeplerK2\\Individual Frames'
+
+# Example: Load and visualize a specific frame
+frame_number = 1228
+mat_filename = os.path.join(save_directory, f'frame_{frame_number:04d}.mat')
+
+# Load the .mat file
+mat_data = loadmat(mat_filename)
+frame_data = mat_data['frame_data']
+
+# Visualize the frame data
+plt.imshow(frame_data, cmap='viridis', origin='lower', vmin=0, vmax=50, aspect='auto')
+plt.title(f"Frame {frame_number}")
+plt.xlabel("Pixel Row")
+plt.ylabel("Time")
+plt.colorbar(label="Intensity")
+plt.show()

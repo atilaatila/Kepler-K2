@@ -1,0 +1,41 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+
+def read_memmap_file(filename, shape, dtype=np.float32):
+    """Read and memory-map the .DAT file."""
+    return np.memmap(filename, dtype=dtype, mode='r', shape=shape)
+
+def visualize_frame(image_data, frame, title="Frame"):
+    """Visualize a specific frame from the image data."""
+    plt.imshow(image_data[:, :, frame], cmap='viridis', origin='lower', aspect='auto')
+    plt.title(f"{title} {frame}")
+    plt.xlabel("Pixel Row")
+    plt.ylabel("Time")
+    plt.colorbar(label="Flux")
+    plt.show()
+
+def main():
+    # Define the parameters for the memmap file
+    raw_filename = 'image_time_series_raw.dat'
+    cor_filename = 'image_time_series_cor.dat'
+    
+    # Replace these with the actual dimensions
+    N_row = 99
+    N_date = 101580
+    N_file = 161
+    
+    # Memory-map the files
+    image_time_series_raw = read_memmap_file(raw_filename, (N_row, N_date, N_file))
+    image_time_series_cor = read_memmap_file(cor_filename, (N_row, N_date, N_file))
+    
+    # Visualize a specific frame
+    frame_to_visualize = 0
+    visualize_frame(image_time_series_raw, frame_to_visualize, title="Raw Data Frame")
+    visualize_frame(image_time_series_cor, frame_to_visualize, title="Corrected Data Frame")
+
+    # Additional processing can be done here
+    # For example, you can calculate statistics, save specific frames, etc.
+
+if __name__ == "__main__":
+    main()
