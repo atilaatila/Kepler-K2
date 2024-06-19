@@ -9,8 +9,12 @@ from scipy.io import savemat
 
 
 def read_fits_data(dir_data):
+    print("Reading FITS files from directory:", dir_data)
     file_list = [f for f in os.listdir(dir_data) if f.endswith('c03_spd-targ.fits')]
+    print("Found FITS files:", file_list)
+    
     N_file = len(file_list)
+    print("Number of FITS files:", N_file)
 
     N_date_ii = np.zeros(N_file)
     col_start = np.zeros(N_file)
@@ -19,6 +23,7 @@ def read_fits_data(dir_data):
 
     for ii in range(N_file):
         file_name = os.path.join(dir_data, file_list[ii])
+        print(f"Processing file {ii+1}/{N_file}: {file_name}")
         with fits.open(file_name) as hdulist:
             header1 = hdulist[1].header
             header2 = hdulist[2].header
@@ -28,14 +33,20 @@ def read_fits_data(dir_data):
         row_start[ii] = header2['CRVAL2P']
         N_pix[ii] = header2['NAXIS2']
 
+        print(f"File {ii+1}: N_date_ii = {N_date_ii[ii]}, col_start = {col_start[ii]}, row_start = {row_start[ii]}, N_pix = {N_pix[ii]}")
+
     col_min = min(col_start)
     col_max = max(col_start)
     N_col = int(col_max - col_min + 1)
+    print("Column range:", col_min, "to", col_max, "=> N_col =", N_col)
 
     row_min = min(row_start)
     row_max = max(row_start + N_pix)
     N_row = int(row_max - row_min + 1)
+    print("Row range:", row_min, "to", row_max, "=> N_row =", N_row)
+
     N_date = int(max(N_date_ii))
+    print("Maximum N_date:", N_date)
 
     time_time_series = np.zeros((N_date, N_file))
     image_time_series_raw = np.zeros((N_row, N_date, N_file))
@@ -43,6 +54,7 @@ def read_fits_data(dir_data):
 
     for ii in range(N_file):
         file_name = os.path.join(dir_data, file_list[ii])
+        print(f"Reading data from file {ii+1}/{N_file}: {file_name}")
         with fits.open(file_name) as hdulist:
             tab = hdulist[1].data
 
@@ -54,8 +66,10 @@ def read_fits_data(dir_data):
 
         col_sap_ii = tab['FLUX']
         image_time_series_raw[ind_y_min:ind_y_max, :, ii] = col_sap_ii.T
-
         image_time_series_cor[ind_y_min:ind_y_max, :, ii] = col_sap_ii.T
+
+        print(f"File {ii+1}: ind_y_min = {ind_y_min}, ind_y_max = {ind_y_max}")
+        print(f"Time series for file {ii+1}:", time_time_series[:, ii])
 
     return N_row, N_file, N_date, time_time_series, image_time_series_raw, image_time_series_cor
 
@@ -293,23 +307,27 @@ def display_centroid_boxes_static(image_time_series_reshape, centroids, coordina
 
 def main():
     # Directory path for data
-    dir_data = 'D:\Kepler Code'
+    #dir_data = 'D:\Kepler Code'
+    # Directory path for data at Observatorium
+    dir_data = '/home/atila/Repository/Kepler/Data'
 
     # Directory path to save frames and animation
-    save_directory = 'D:\\Kepler Code\\KeplerK2\\Individual Frames'
+    #save_directory = 'D:\\Kepler Code\\KeplerK2\\Individual Frames'
+    # Directory path to save frames and animation observatorium
+    save_directory = 'home/atila/Repository/Kepler'
 
     # Coordinates for ROIs
     coordinates = [
-         [20, 137, 31, 145],  # [x_min, y_min, x_max, y_max]
-        [5, 144, 14, 154],
-        [82, 128, 88, 135],
-        [140, 81, 148, 89],
-        [183, 106, 192, 114],
-        [208, 99, 216, 108],
-        [223, 101, 231, 108],
-        [201, 57, 207, 65],
-        [204, 68, 212, 72],
-        [295, 70, 302, 79],
+         [20, 137, 31, 145]#,  # [x_min, y_min, x_max, y_max]
+        # [5, 144, 14, 154],
+        # [82, 128, 88, 135],
+        # [140, 81, 148, 89],
+        # [183, 106, 192, 114],
+        # [208, 99, 216, 108],
+        # [223, 101, 231, 108],
+        # [201, 57, 207, 65],
+        # [204, 68, 212, 72],
+        # [295, 70, 302, 79],
         # [346, 72, 353, 78],
         # [355, 57, 362, 64],
         # [345, 43, 356, 52],
@@ -333,39 +351,56 @@ def main():
     ]
 
     # Read FITS data
+    print("Reading FITS data...")
     N_row, N_file, N_date, time_time_series, image_time_series_raw, image_time_series_cor = read_fits_data(dir_data)
+    print("Reading FITS data done")  
 
     # Preprocess data
+    print("Preprocessing data...")
     ima_good_mean, ima_good_median, image_time_series_reshape = preprocess_data(image_time_series_raw)
+    print("Preprocessing data done")
 
     # Calculate centroids for each ROI
-    #centroids = calculate_centroids_static(image_time_series_reshape, coordinates)
+    print("Calculating static centroids...")
+    centroids = calculate_centroids_static(image_time_series_reshape, coordinates)
+    print("Calculating static centroids done")
 
-    # Calculate centroids for each ROI over time
-    #centroids_over_time = calculate_centroids_dynamic(image_time_series_reshape, coordinates)
+    # # Calculate centroids for each ROI over time
+    # print("Calculating dynamic centroids...")
+    # centroids_over_time = calculate_centroids_dynamic(image_time_series_reshape, coordinates)
+    # print("Calculating dynamic centroids done")
 
-    # Create centroid animations and get centroids data
-    #centroids_data = create_centroid_animations(image_time_series_reshape, centroids_over_time, coordinates, dir_data)
+    # # Create centroid animations and get centroids data
+    # print("Creating centroid animations...")
+    # centroids_data = create_centroid_animations(image_time_series_reshape, centroids_over_time, coordinates, dir_data)
+    # print("Creating centroid animations done")
 
-    # Save flux data for each ROI
-    #save_flux_data(image_time_series_reshape, coordinates)
+    # # Save flux data for each ROI
+    # print("Saving flux data for each ROI...")
+    # save_flux_data(image_time_series_reshape, coordinates)
+    # print("Saving flux data for each ROI done")
 
-    # Save and display static image
-    #static_image_path = 'static_image.png'
-    #display_static_image(image_time_series_reshape[:, :, 0], ima_good_median, coordinates, save_path=static_image_path)
-
-    # Display and save images of centroid boxes
-    #display_centroid_boxes_static(image_time_series_reshape, centroids, coordinates, dir_data)
-
-    # Saving centroid data into variable
-    #centroids_data = create_centroid_animations(image_time_series_reshape, centroids_over_time, coordinates, dir_data)
-
-    # Saving centroid data to CSV using the returned centroids_data dictionary
-    #save_centroid_data_to_csv(centroids_data, dir_data)
-
-    # Creating time_series animation and saving each frame
-    create_animation(image_time_series_reshape, save_directory)
+    # # Save and display static image
+    # print("Displaying static image...")
+    # static_image_path = 'static_image.png'
+    # display_static_image(image_time_series_reshape[:, :, 0], ima_good_median, coordinates, save_path=static_image_path)
+    # print("Displaying static image done")
     
+    # # Display and save images of centroid boxes
+    # print("Displaying centroid boxes...")
+    # display_centroid_boxes_static(image_time_series_reshape, centroids, coordinates, dir_data)
+    # print("Displaying centroid boxes done")
+
+    # # Saving centroid data to CSV using the returned centroids_data dictionary
+    # print("Saving centroid data to CSV...")
+    # save_centroid_data_to_csv(centroids_data, dir_data)
+    # print("Saving centroid data to CSV done")
+
+    # # Creating time_series animation and saving each frame
+    # print("Creating time_series animation...")
+    # create_animation(image_time_series_reshape, save_directory)
+    # print("Creating time_series animation done") 
+
     plt.show()  # Ensure all plots are displayed
 
     input("Press Enter to exit...")

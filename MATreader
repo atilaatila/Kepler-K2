@@ -3,10 +3,11 @@ from scipy.io import loadmat
 import matplotlib.pyplot as plt
 
 # Directory where the .mat files are saved
-save_directory = 'D:\\Kepler Code\\KeplerK2\\Individual Frames'
+#save_directory = 'D:\\Kepler Code\\KeplerK2\\Individual Frames'
+save_directory = '/home/atila/Repository/Kepler-K2/Short cadence frames'
 
 # Example: Load and visualize a specific frame
-frame_number = 1228
+frame_number = 44780
 mat_filename = os.path.join(save_directory, f'frame_{frame_number:04d}.mat')
 
 # Load the .mat file
